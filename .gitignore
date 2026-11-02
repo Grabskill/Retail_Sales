@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.streamlit/
+reports/
+.DS_Store
+Thumbs.db
+~$*
+cursor_data_profiling_for_cursorai_proj.md

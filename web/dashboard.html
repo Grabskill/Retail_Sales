@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>E-commerce Sales Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --surface: #ffffff;
+      --text: #1c2430;
+      --muted: #5b6775;
+      --line: #e4e8ee;
+      --accent: #1f4e79;
+      --accent-2: #2e7d6f;
+      --warn: #b45309;
+      --shadow: none;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: "Segoe UI", system-ui, sans-serif; }
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+      padding: 20px 24px 16px;
+    }
+    h1 { margin: 0 0 4px; font-size: 22px; font-weight: 600; }
+    .subtitle { margin: 0; color: var(--muted); font-size: 13px; }
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 16px;
+      padding: 16px 24px 0;
+      align-items: end;
+    }
+    label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--muted); font-weight: 600; }
+    select {
+      min-width: 160px;
+      height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      padding: 0 10px;
+      font-size: 14px;
+    }
+    main { padding: 16px 24px 32px; display: flex; flex-direction: column; gap: 16px; }
+    .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .kpi-label { font-size: 12px; color: var(--muted); font-weight: 600; }
+    .kpi-value { font-size: 26px; font-weight: 650; margin-top: 6px; letter-spacing: -0.03em; }
+    .kpi-note { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .grid-2 { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 12px; }
+    h2 { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
+    .chart-wrap { position: relative; height: 280px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 600; font-size: 12px; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .empty { color: var(--muted); font-size: 13px; padding: 24px 0; }
+    @media (max-width: 1100px) {
+      .kpis, .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>E-commerce sales dashboard</h1>
+    <p class="subtitle">Cleaned star schema · Jan 2024–Dec 2025 · net of returns · 10 invalid-date orders excluded</p>
+  </header>
+
+  <div class="filters">
+    <label>Year
+      <select id="filter-year"></select>
+    </label>
+    <label>Region
+      <select id="filter-region"></select>
+    </label>
+    <label>Category
+      <select id="filter-category"></select>
+    </label>
+  </div>
+
+  <main>
+    <section class="kpis">
+      <article class="card">
+        <div class="kpi-label">Revenue</div>
+        <div class="kpi-value" id="kpi-revenue">—</div>
+        <div class="kpi-note" id="kpi-revenue-note"></div>
+      </article>
+      <article class="card">
+        <div class="kpi-label">Profit</div>
+        <div class="kpi-value" id="kpi-profit">—</div>
+        <div class="kpi-note" id="kpi-margin"></div>
+      </article>
+      <article class="card">
+        <div class="kpi-label">Orders</div>
+        <div class="kpi-value" id="kpi-orders">—</div>
+      </article>
+      <article class="card">
+        <div class="kpi-label">Customers</div>
+        <div class="kpi-value" id="kpi-customers">—</div>
+        <div class="kpi-note">Distinct customer IDs in view</div>
+      </article>
+    </section>
+
+    <section class="grid-2">
+      <article class="card">
+        <h2>Monthly sales trend</h2>
+        <div class="chart-wrap"><canvas id="chart-monthly"></canvas></div>
+      </article>
+      <article class="card">
+        <h2>Revenue by category</h2>
+        <div class="chart-wrap"><canvas id="chart-category"></canvas></div>
+      </article>
+    </section>
+
+    <section class="grid-3">
+      <article class="card">
+        <h2>Profit by region</h2>
+        <div class="chart-wrap"><canvas id="chart-region"></canvas></div>
+      </article>
+      <article class="card" style="grid-column: span 2;">
+        <h2>Top 10 products by revenue</h2>
+        <div id="top-products"></div>
+      </article>
+    </section>
+  </main>
+
+  <script src="dashboard_data.js?v=2"></script>
+  <script>
+    const DATA = window.DASHBOARD_DATA;
+    const palette = ["#1f4e79", "#2e7d6f", "#b45309", "#6b4c9a", "#3f6f9a"];
+
+    const yearSel = document.getElementById("filter-year");
+    const regionSel = document.getElementById("filter-region");
+    const categorySel = document.getElementById("filter-category");
+
+    function fillSelect(el, options, allLabel) {
+      el.innerHTML = "";
+      const all = document.createElement("option");
+      all.value = "all";
+      all.textContent = allLabel;
+      el.appendChild(all);
+      options.forEach((value) => {
+        const opt = document.createElement("option");
+        opt.value = value;
+        opt.textContent = value;
+        el.appendChild(opt);
+      });
+    }
+
+    fillSelect(yearSel, DATA.years.map(String), "All years");
+    fillSelect(regionSel, DATA.regions, "All regions");
+    fillSelect(categorySel, DATA.categories, "All categories");
+
+    function inr(n) {
+      return Number(n).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+    }
+
+    function currentView() {
+      const key = [yearSel.value || "all", regionSel.value || "all", categorySel.value || "all"].join("|");
+      return DATA.views[key] || DATA.views["all|all|all"];
+    }
+
+    const charts = {};
+    function upsertChart(id, config) {
+      if (charts[id]) charts[id].destroy();
+      charts[id] = new Chart(document.getElementById(id), config);
+    }
+
+    function render() {
+      const view = currentView();
+      const margin = view.revenue ? (view.profit / view.revenue) * 100 : 0;
+      document.getElementById("kpi-revenue").textContent = inr(view.revenue);
+      document.getElementById("kpi-profit").textContent = inr(view.profit);
+      document.getElementById("kpi-orders").textContent = inr(view.orders);
+      document.getElementById("kpi-customers").textContent = inr(view.customers);
+      document.getElementById("kpi-revenue-note").textContent = view.orders ? `${inr(view.orders)} orders in view` : "No matching orders";
+      document.getElementById("kpi-margin").textContent = view.orders ? `Margin ${margin.toFixed(1)}%` : "";
+
+      upsertChart("chart-monthly", {
+        type: "line",
+        data: {
+          labels: view.monthly.map((d) => d.label),
+          datasets: [
+            { label: "Revenue", data: view.monthly.map((d) => d.revenue), borderColor: "#1f4e79", backgroundColor: "rgba(31,78,121,0.12)", fill: true, tension: 0.2, pointRadius: 2 },
+            { label: "Profit", data: view.monthly.map((d) => d.profit), borderColor: "#2e7d6f", backgroundColor: "rgba(46,125,111,0.08)", fill: true, tension: 0.2, pointRadius: 2 }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: { legend: { position: "top" } },
+          scales: { y: { ticks: { callback: (v) => inr(v) } } }
+        }
+      });
+
+      const cats = view.byCategory.filter((d) => d.revenue !== 0 || !categorySel.value || categorySel.value === "all");
+      upsertChart("chart-category", {
+        type: "bar",
+        data: {
+          labels: cats.map((d) => d.name),
+          datasets: [{ label: "Revenue", data: cats.map((d) => d.revenue), backgroundColor: palette }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { ticks: { callback: (v) => inr(v) } } }
+        }
+      });
+
+      const regs = view.byRegion.filter((d) => d.profit !== 0 || !regionSel.value || regionSel.value === "all");
+      upsertChart("chart-region", {
+        type: "bar",
+        data: {
+          labels: regs.map((d) => d.name),
+          datasets: [{ label: "Profit", data: regs.map((d) => d.profit), backgroundColor: "#2e7d6f" }]
+        },
+        options: {
+          indexAxis: "y",
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { x: { ticks: { callback: (v) => inr(v) } } }
+        }
+      });
+
+      const holder = document.getElementById("top-products");
+      if (!view.topProducts.length) {
+        holder.innerHTML = '<div class="empty">No products in this filter.</div>';
+      } else {
+        holder.innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th class="num">Revenue</th>
+                <th class="num">Profit</th>
+                <th class="num">Margin</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${view.topProducts.map((p) => {
+                const m = p.revenue ? (p.profit / p.revenue) * 100 : 0;
+                return `<tr>
+                  <td>${p.id} · ${p.name}</td>
+                  <td class="num">${inr(p.revenue)}</td>
+                  <td class="num">${inr(p.profit)}</td>
+                  <td class="num">${m.toFixed(1)}%</td>
+                </tr>`;
+              }).join("")}
+            </tbody>
+          </table>`;
+      }
+    }
+
+    yearSel.addEventListener("change", render);
+    regionSel.addEventListener("change", render);
+    categorySel.addEventListener("change", render);
+    render();
+  </script>
+</body>
+</html>
