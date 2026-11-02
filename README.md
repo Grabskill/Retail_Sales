@@ -68,7 +68,6 @@ segment, signup_date      order_id (degenerate PK)  sub_category,
 ## 3. Pipeline engineering and cleaning interventions
 
 
-```bash
 python scripts/profile_data.py
 python scripts/clean_data.py
 python scripts/evaluate_metrics.py
@@ -86,7 +85,7 @@ python scripts/evaluate_metrics.py
 | Returns            | Negative quantity kept; `is_return = True`                                     |
 | Calendar           | `dim_date` from valid fact dates only (2024–2025, 731 days)                    |
 
-Missing customer/product IDs are **not** filled with statistical defaults. Imputing a “typical” customer onto an orphan order would bias segment and region performance. Flags are the production-safe pattern.
+Missing customer/product IDs are **not** filled with statistical defaults. 
 
 ### Representative pipeline snippets
 
